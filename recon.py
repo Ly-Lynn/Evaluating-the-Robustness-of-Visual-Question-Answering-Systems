@@ -275,11 +275,21 @@ class ReconstructorTrainer:
         return torch.cat(all_outputs, dim=0)
 
 if __name__ == "__main__":
-    batch_size = 100
+    batch_size = 1000
     # img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
     img_path = r'/kaggle/working/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
     image = resize_image(image, (128, 128)).cuda()
+    # Convert the tensor image to a PIL image and save it
+    img = image.cpu().detach().numpy()[0]  # remove batch dimension if present
+    if img.shape[0] == 3:
+        img = np.transpose(img, (1, 2, 0))
+    img = np.clip(img, 0, 1)
+    img = (img * 255).astype(np.uint8)
+    pil_img = Image.fromarray(img)
+    pil_img.save("org_image.png")
+
+
     target_image = image.unsqueeze(0)  
     target_images = image.unsqueeze(0).repeat(batch_size, 1, 1, 1)
     print("Image shape:", target_images.shape)
@@ -316,26 +326,16 @@ if __name__ == "__main__":
         train_latent_vectors=train_vectors,
         val_target_images=val_target_images,
         val_latent_vectors=val_vectors,
-        epochs=1000,
+        epochs=500,
         patience=50,
     )
     
     # ------------------------- TEST INFER ON 1 IMG -------------------------
+    model = reconstructor.load_model(r"D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\improved_results\best_model.pth")
     test_inference_vec = torch.randn(1, 768)
-    test_inf, l2 = reconstructor.eval(image, test_inference_vec)
+    test_inf, l2 = model.eval(image.unsqueeze(0), test_inference_vec)
     print("output ", test_inf.shape)
 
-    print("L2 distance:", l2.item())
+    print("L2 distance:", l2)
     reconstructor.save_image(test_inf, "test_inf.png")
-    reconstructor.save_model("test_model.pth")
-
-
-    
-    # # ------------------------- TEST 1 -------------------------
-    # latent_dim = 768
-    # random_latent_vector = torch.randn(1, 768).to('cuda')
-    # reconstructor = ReconstructorTrainer(latent_dim=latent_dim)
-    # output_image = reconstructor.eval(random_latent_vector)
-    # print("Output shape:", output_image.shape)
-    # print("Output image:", output_image)
-    # print("L2 distance:", reconstructor.l2_distance(output_image, image))
+    # reconstructor.save_model("test_model.pth")
