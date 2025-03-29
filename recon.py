@@ -13,7 +13,6 @@ from metrics import L2
 from torchvision import models
 
 class SSIM(nn.Module):
-    """Custom implementation of SSIM loss without external package dependency"""
     def __init__(self, window_size=11, size_average=True, channel=3):
         super(SSIM, self).__init__()
         self.window_size = window_size
@@ -32,20 +31,16 @@ class SSIM(nn.Module):
         return window
 
     def forward(self, img1, img2):
-        # Ensure tensors have the same shape
         if img1.shape != img2.shape:
             raise ValueError(f"Input images must have the same dimensions, got {img1.shape} and {img2.shape}")
             
-        # Ensure proper channel dimension
         if img1.dim() == 3:
             img1 = img1.unsqueeze(0)
             img2 = img2.unsqueeze(0)
             
-        # Move window to the same device as input images
         device = img1.device
         window = self.window.to(device)
         
-        # Compute means
         mu1 = F.conv2d(img1, window, padding=self.window_size//2, groups=self.channel)
         mu2 = F.conv2d(img2, window, padding=self.window_size//2, groups=self.channel)
         
@@ -53,16 +48,13 @@ class SSIM(nn.Module):
         mu2_sq = mu2.pow(2)
         mu1_mu2 = mu1 * mu2
         
-        # Compute variances and covariance
         sigma1_sq = F.conv2d(img1 * img1, window, padding=self.window_size//2, groups=self.channel) - mu1_sq
         sigma2_sq = F.conv2d(img2 * img2, window, padding=self.window_size//2, groups=self.channel) - mu2_sq
         sigma12 = F.conv2d(img1 * img2, window, padding=self.window_size//2, groups=self.channel) - mu1_mu2
         
-        # SSIM constants
         C1 = 0.01 ** 2
         C2 = 0.03 ** 2
         
-        # Compute SSIM
         ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
         
         if self.size_average:
@@ -160,16 +152,13 @@ class ReconstructorTrainer:
         latent_vectors = latent_vectors.to(self.device)
         target_images = target_images.to(self.device)
         
-        # Apply latent augmentation
         augmented_latent = self.augment_latent(latent_vectors)
         
         self.optimizer.zero_grad()
         output_images = self.decoder(augmented_latent)
         
-        # Calculate loss
         reconstruction_loss = self.criterion(output_images, target_images)
         
-        # Add L2 regularization
         l2_reg = 0
         for param in self.decoder.parameters():
             l2_reg += torch.norm(param)
@@ -221,7 +210,6 @@ class ReconstructorTrainer:
             # Log losses
             self.save_log_loss(val_loss, epoch)
             
-            # Save model and image if it's the best so far
             if val_loss < best_loss:
                 best_loss = val_loss
                 self.best_epoch = epoch
@@ -231,12 +219,10 @@ class ReconstructorTrainer:
             else:
                 patience_counter += 1
             
-            # Save periodic checkpoints
             if (epoch + 1) % save_interval == 0:
                 self.save_model(f"checkpoint_epoch_{epoch}.pth")
                 self.save_image(img, f"train_image_epoch_{epoch}.png")
             
-            # Print progress
             if (epoch + 1) % (epochs // 20) == 0:
                 print(f"\nEpoch [{epoch+1}/{epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
             
@@ -247,12 +233,10 @@ class ReconstructorTrainer:
                 
             self.scheduler.step()
         
-        # Load best model before returning
         self.load_model(os.path.join(self.output, "best_model.pth"))
         return best_loss
     
     def eval(self, org_img, latent_vectors, save_path=None):
-        """Evaluate the model on given latent vectors"""
         self.decoder.eval()
         latent_vectors = latent_vectors.to(self.device)
         org_img = org_img.to(self.device)
@@ -263,22 +247,18 @@ class ReconstructorTrainer:
         # Calculate metrics
         mse_loss = F.mse_loss(output_images, org_img).item()
         
-        # Calculate SSIM without external package
         ssim_module = SSIM(window_size=11, size_average=True, channel=output_images.shape[1])
         ssim_value = ssim_module(output_images, org_img).item()
         
-        # Save reconstruction if path provided
         if save_path:
             self.save_image(output_images, save_path)
         
         return output_images, {'mse': mse_loss, 'ssim': ssim_value}
     
     def reconstruct_batch(self, latent_vectors, batch_size=16):
-        """Reconstruct images from a large batch of latent vectors"""
         self.decoder.eval()
         all_outputs = []
         
-        # Process in batches to avoid memory issues
         num_vectors = latent_vectors.size(0)
         
         for i in range(0, num_vectors, batch_size):
