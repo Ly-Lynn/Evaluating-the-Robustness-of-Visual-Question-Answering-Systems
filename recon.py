@@ -345,7 +345,7 @@ class ReconstructorTrainer:
         return torch.cat(all_outputs, dim=0)
 
 if __name__ == "__main__":
-    batch_size = 100
+    batch_size = 1000
     # img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
     img_path = r'/kaggle/working/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
