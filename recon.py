@@ -273,7 +273,7 @@ class ReconstructorTrainer:
 
 if __name__ == "__main__":
     batch_size = 100
-    img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
+    img_path = r'/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
     image = resize_image(image, (128, 128)).cuda()
     target_image = image.unsqueeze(0)  
