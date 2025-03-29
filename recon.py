@@ -32,8 +32,11 @@ class SSIM(nn.Module):
 
     def forward(self, img1, img2):
         if img1.shape != img2.shape:
-            raise ValueError(f"Input images must have the same dimensions, got {img1.shape} and {img2.shape}")
-            
+            print(f"Shape mismatch: {img1.shape} vs {img2.shape}")
+            if img1.dim() == 3 and img2.dim() == 4:
+                img1 = img1.unsqueeze(0)
+            elif img1.dim() == 4 and img2.dim() == 3:
+                img2 = img2.unsqueeze(0)            
         if img1.dim() == 3:
             img1 = img1.unsqueeze(0)
             img2 = img2.unsqueeze(0)
