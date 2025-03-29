@@ -11,6 +11,8 @@ import os
 import random
 from metrics import L2
 from torchvision import models
+import torch.distributed as dist
+from torch.nn.parallel import DataParallel, DistributedDataParallel
 
 class SSIM(nn.Module):
     def __init__(self, window_size=11, size_average=True, channel=3):
@@ -91,7 +93,13 @@ class ReconstructorTrainer:
                 use_augmentation=True,
                 regularization_weight=1e-5):
         self.device = device
-        self.decoder = decoder.to(self.device)
+        self.decoder = decoder
+        self.use_multi_gpu = False
+        if torch.cuda.device_count() > 1:
+            self.use_multi_gpu = True
+            self.decoder = DataParallel(self.decoder)
+            self.decoder.to(self.device)
+
         self.optimizer = optimizer
         self.criterion = CombinedLoss() if criterion is None else criterion
         self.scheduler = scheduler
@@ -115,9 +123,11 @@ class ReconstructorTrainer:
             
     def save_model(self, path):
         path = os.path.join(self.output, path)
+        model_to_save = self.decoder.module if self.use_multi_gpu else self.decoder
+        
         torch.save({
             'epoch': self.best_epoch,
-            'model_state_dict': self.decoder.state_dict(),
+            'model_state_dict': model_to_save.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'train_losses': self.train_losses,
             'val_losses': self.val_losses
@@ -125,7 +135,11 @@ class ReconstructorTrainer:
         
     def load_model(self, path):
         checkpoint = torch.load(path)
-        self.decoder.load_state_dict(checkpoint['model_state_dict'])
+        if self.use_multi_gpu:
+            self.decoder.module.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.decoder.load_state_dict(checkpoint['model_state_dict'])
+            
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.best_epoch = checkpoint['epoch']
         self.train_losses = checkpoint['train_losses']
@@ -275,7 +289,7 @@ class ReconstructorTrainer:
         return torch.cat(all_outputs, dim=0)
 
 if __name__ == "__main__":
-    batch_size = 1000
+    batch_size = 100
     # img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
     img_path = r'/kaggle/working/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
