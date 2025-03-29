@@ -98,7 +98,7 @@ class ReconstructorTrainer:
         if torch.cuda.device_count() > 1:
             self.use_multi_gpu = True
             self.decoder = DataParallel(self.decoder)
-            self.decoder.to(self.device)
+        self.decoder.to(self.device)
 
         self.optimizer = optimizer
         self.criterion = CombinedLoss() if criterion is None else criterion
@@ -169,9 +169,10 @@ class ReconstructorTrainer:
         latent_vectors = latent_vectors.to(self.device)
         target_images = target_images.to(self.device)
         
-        augmented_latent = self.augment_latent(latent_vectors)
+        augmented_latent = self.augment_latent(latent_vectors).to(self.device)
         
         self.optimizer.zero_grad()
+
         output_images = self.decoder(augmented_latent)
         
         reconstruction_loss = self.criterion(output_images, target_images)
@@ -200,10 +201,11 @@ class ReconstructorTrainer:
         return output_images, loss.item()
     
     def train(self, train_latent_vectors, train_target_images, 
-              val_latent_vectors=None, val_target_images=None, 
-              epochs=1000, patience=50, save_interval=100):
+          val_latent_vectors=None, val_target_images=None, 
+          epochs=1000, patience=50, save_interval=100, batch_size=32):
         """
         Train the reconstructor with early stopping based on validation loss
+        and batch processing for large datasets
         """
         best_loss = float('inf')
         patience_counter = 0
@@ -215,13 +217,39 @@ class ReconstructorTrainer:
             train_latent_vectors = train_latent_vectors[:split]
             train_target_images = train_target_images[:split]
         
+        train_size = train_latent_vectors.size(0)
+        num_batches = (train_size + batch_size - 1) // batch_size  # Ceiling division
+        
         for epoch in tqdm(range(epochs), desc="Training", unit="epoch"):
-            # Training step
-            img, train_loss = self.train_step(train_latent_vectors, train_target_images)
-            self.train_losses.append(train_loss)
             
-            # Validation step
-            val_img, val_loss = self.validate(val_latent_vectors, val_target_images)
+            indices = torch.randperm(train_size)
+            
+            total_train_loss = 0.0
+            last_output = None
+            
+            # Training by batches
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, train_size)
+                
+                # Lấy chỉ số batch hiện tại
+                batch_indices = indices[start_idx:end_idx]
+                
+                # Lấy dữ liệu theo batch
+                batch_latent = train_latent_vectors[batch_indices]
+                batch_images = train_target_images[batch_indices]
+                
+                # Training step trên batch
+                output, batch_loss = self.train_step(batch_latent, batch_images)
+                total_train_loss += batch_loss
+                
+                # Lưu output của batch cuối cùng để hiển thị
+                if batch_idx == num_batches - 1:
+                    last_output = output
+            
+            avg_train_loss = total_train_loss / num_batches
+            self.train_losses.append(avg_train_loss)
+            val_output, val_loss = self.validate_in_batches(val_latent_vectors, val_target_images, batch_size)
             self.val_losses.append(val_loss)
             
             # Log losses
@@ -231,17 +259,17 @@ class ReconstructorTrainer:
                 best_loss = val_loss
                 self.best_epoch = epoch
                 patience_counter = 0
-                # self.save_image(val_img, f"best_image_epoch_{epoch}.png")
                 self.save_model(f"best_model.pth")
             else:
                 patience_counter += 1
             
             if (epoch + 1) % save_interval == 0:
                 self.save_model(f"checkpoint_epoch_{epoch}.pth")
-                self.save_image(img, f"train_image_epoch_{epoch}.png")
+                if last_output is not None:
+                    self.save_image(last_output, f"train_image_epoch_{epoch}.png")
             
             if (epoch + 1) % (epochs // 20) == 0:
-                print(f"\nEpoch [{epoch+1}/{epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+                print(f"\nEpoch [{epoch+1}/{epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}")
             
             # Early stopping
             if patience_counter >= patience:
@@ -252,6 +280,34 @@ class ReconstructorTrainer:
         
         self.load_model(os.path.join(self.output, "best_model.pth"))
         return best_loss
+
+    def validate_in_batches(self, val_latent_vectors, val_target_images, batch_size=32):
+        self.decoder.eval()
+        
+        val_size = val_latent_vectors.size(0)
+        num_batches = (val_size + batch_size - 1) // batch_size
+        
+        total_val_loss = 0.0
+        last_output = None
+        
+        with torch.no_grad():
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, val_size)
+                
+                batch_latent = val_latent_vectors[start_idx:end_idx].to(self.device)
+                batch_images = val_target_images[start_idx:end_idx].to(self.device)
+                
+                output = self.decoder(batch_latent)
+                batch_loss = self.criterion(output, batch_images).item()
+                
+                total_val_loss += batch_loss
+                
+                if batch_idx == num_batches - 1:
+                    last_output = output
+        
+        avg_val_loss = total_val_loss / num_batches
+        return last_output, avg_val_loss
     
     def eval(self, org_img, latent_vectors, save_path=None):
         self.decoder.eval()
@@ -289,7 +345,7 @@ class ReconstructorTrainer:
         return torch.cat(all_outputs, dim=0)
 
 if __name__ == "__main__":
-    batch_size = 1000
+    batch_size = 100
     # img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
     img_path = r'/kaggle/working/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
@@ -342,6 +398,7 @@ if __name__ == "__main__":
         val_latent_vectors=val_vectors,
         epochs=500,
         patience=50,
+        batch_size=64
     )
     
     # ------------------------- TEST INFER ON 1 IMG -------------------------
