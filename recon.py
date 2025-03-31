@@ -227,23 +227,18 @@ class ReconstructorTrainer:
             total_train_loss = 0.0
             last_output = None
             
-            # Training by batches
             for batch_idx in range(num_batches):
                 start_idx = batch_idx * batch_size
                 end_idx = min((batch_idx + 1) * batch_size, train_size)
                 
-                # Lấy chỉ số batch hiện tại
                 batch_indices = indices[start_idx:end_idx]
                 
-                # Lấy dữ liệu theo batch
                 batch_latent = train_latent_vectors[batch_indices]
                 batch_images = train_target_images[batch_indices]
                 
-                # Training step trên batch
                 output, batch_loss = self.train_step(batch_latent, batch_images)
                 total_train_loss += batch_loss
                 
-                # Lưu output của batch cuối cùng để hiển thị
                 if batch_idx == num_batches - 1:
                     last_output = output
             
