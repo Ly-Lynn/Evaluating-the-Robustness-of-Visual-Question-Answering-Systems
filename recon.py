@@ -374,7 +374,7 @@ if __name__ == "__main__":
     
 
     # ------------------------- TEST TRAIN -------------------------
-    latent_vectors = torch.randn(batch_size, 768)
+    latent_vectors = torch.rand(batch_size, 768)
     train_vectors = latent_vectors[:int(0.8 * batch_size)]
     val_vectors = latent_vectors[int(0.8 * batch_size):]
     train_target_images = target_images[:int(0.8 * batch_size)]
@@ -402,7 +402,7 @@ if __name__ == "__main__":
     )
     
     # ------------------------- TEST INFER ON 1 IMG -------------------------
-    model = reconstructor.load_model(r"D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\improved_results\best_model.pth")
+    model = reconstructor.load_model(r"\kaggle\working\improved_results\best_model.pth")
     test_inference_vec = torch.randn(1, 768)
     test_inf, l2 = model.eval(image.unsqueeze(0), test_inference_vec)
     print("output ", test_inf.shape)
