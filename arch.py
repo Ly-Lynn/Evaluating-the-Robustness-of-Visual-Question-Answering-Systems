@@ -10,7 +10,6 @@ class ResBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(out_channels)
         
-        # Shortcut connection nếu kích thước khác nhau
         self.shortcut = nn.Sequential()
         if in_channels != out_channels:
             self.shortcut = nn.Sequential(
@@ -33,10 +32,8 @@ class Decoder(nn.Module):
     def __init__(self, latent_dim=768, output_size=128):
         super(Decoder, self).__init__()
         
-        # Tính toán số lớp upsampling cần thiết
-        self.initial_size = output_size // 16  # Bắt đầu từ 8x8
+        self.initial_size = output_size // 16  # 8*8
         
-        # Projection từ vectơ tiềm ẩn sang tensor 2D
         self.projection = nn.Sequential(
             nn.Linear(latent_dim, 512 * self.initial_size * self.initial_size),
             nn.LeakyReLU(0.2)
@@ -83,7 +80,6 @@ class Decoder(nn.Module):
             nn.Tanh()
         )
         
-        # Khởi tạo trọng số
         self._initialize_weights()
     
     def _initialize_weights(self):
@@ -97,15 +93,12 @@ class Decoder(nn.Module):
                 nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
-        # Project and reshape
         x = self.projection(x)
         x = x.view(-1, 512, self.initial_size, self.initial_size)
         
-        # Apply upsampling blocks
         for block in self.up_blocks:
             x = block(x)
         
-        # Final layer to get image
         x = self.to_rgb(x)
         
         return x
@@ -116,6 +109,5 @@ if __name__ == "__main__":
     output_image = decoder(latent_vector)
     print("Output shape:", output_image.shape)
     
-    # In số lượng tham số
     total_params = sum(p.numel() for p in decoder.parameters())
     print(f"Total parameters: {total_params:,}")
