@@ -134,7 +134,8 @@ class ReconstructorTrainer:
         }, path)
         
     def load_model(self, path):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, weights_only=True)
+        self.decoder.eval()
         if self.use_multi_gpu:
             self.decoder.module.load_state_dict(checkpoint['model_state_dict'])
         else:
@@ -340,7 +341,7 @@ class ReconstructorTrainer:
         return torch.cat(all_outputs, dim=0)
 
 if __name__ == "__main__":
-    batch_size = 2000
+    batch_size = 5000
     # img_path = r'D:\codePJ\RESEARCH\Evaluating-the-Robustness-of-Visual-Question-Answering-Systems\test\dog1.jpg'
     img_path = r'/kaggle/working/Evaluating-the-Robustness-of-Visual-Question-Answering-Systems/test/dog1.jpg'
     image = Image.open(img_path)
